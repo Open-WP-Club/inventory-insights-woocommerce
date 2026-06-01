@@ -9,6 +9,8 @@ jQuery(document).ready(function($) {
     var isSearching = false;
     var recentSearches = [];
     var maxRecentSearches = 10;
+    var currentPage = 1;
+    var perPage = 25;
     
     // Initialize the plugin
     initInventoryInsights();
@@ -26,6 +28,7 @@ jQuery(document).ready(function($) {
         bindRecentSearches();
         bindSortOptions();
         bindBulkSelection();
+        bindPagination();
     }
     
     /**
@@ -230,13 +233,40 @@ jQuery(document).ready(function($) {
             }
         });
         
-        // Clear search history
+        // Clear search history — inline two-step confirmation
         $('#clear-search-history').on('click', function() {
-            if (confirm('Are you sure you want to clear all recent searches?')) {
+            var $btn = $(this);
+            if ($btn.data('confirming')) return;
+
+            $btn.data('confirming', true).hide();
+            var $confirm = $(
+                '<span class="wc-ii-inline-confirm">' +
+                '<span>Clear all history?</span>' +
+                '<button type="button" class="button button-link-delete wc-ii-confirm-yes">Yes, clear</button>' +
+                '<button type="button" class="button wc-ii-confirm-no">Cancel</button>' +
+                '</span>'
+            );
+            $btn.after($confirm);
+
+            $confirm.find('.wc-ii-confirm-yes').on('click', function() {
                 recentSearches = [];
                 saveRecentSearches();
                 updateRecentSearchesDropdown();
-            }
+                $confirm.remove();
+                $btn.data('confirming', false).show();
+            });
+
+            $confirm.find('.wc-ii-confirm-no').on('click', function() {
+                $confirm.remove();
+                $btn.data('confirming', false).show();
+            });
+
+            setTimeout(function() {
+                if ($btn.data('confirming')) {
+                    $confirm.remove();
+                    $btn.data('confirming', false).show();
+                }
+            }, 5000);
         });
     }
     
@@ -569,43 +599,37 @@ jQuery(document).ready(function($) {
      * Handle successful search
      */
     function handleSearchSuccess(data) {
-        var $resultsContent = $('#results-content');
         var $exportBtn = $('#export-csv-btn');
         var $sortOptions = $('#sort-options');
         var $resultsCount = $('#results-count');
-        
+
         currentResults = data.products || [];
-        $resultsContent.html(data.html || '<div class="no-results">No results found.</div>');
-        
+        currentPage = 1;
+
         // Update results count
-        var countText = currentResults.length === 1 ? 
-            'Found 1 product' : 
+        var countText = currentResults.length === 1 ?
+            'Found 1 product' :
             'Found ' + currentResults.length + ' products';
         $resultsCount.text(countText);
-        
+
         // Show/hide controls based on results
         if (currentResults.length > 0) {
             $exportBtn.show();
             $sortOptions.show();
-            $('.bulk-actions').hide(); // Hidden until items are selected
-            
-            // Reset sort to default
+            $('.bulk-actions').hide();
             $sortOptions.val('stock_asc');
-            
-            // Reset selection states
-            $('#select-all-checkbox').prop('checked', false).prop('indeterminate', false);
-            $('.product-checkbox').prop('checked', false);
-            updateBulkActionButtons();
         } else {
             $exportBtn.hide();
             $sortOptions.hide();
             $('.bulk-actions').hide();
         }
-        
+
+        renderCurrentPage();
+
         // Add to recent searches
         var formData = getFormData();
         addToRecentSearches(formData);
-        
+
         // Scroll to results
         $('html, body').animate({
             scrollTop: $('#search-results').offset().top - 50
@@ -616,13 +640,112 @@ jQuery(document).ready(function($) {
      * Update results display (for sorting)
      */
     function updateResultsDisplay() {
+        currentPage = 1;
+        renderCurrentPage();
+    }
+
+    /**
+     * Render the current page of results with pagination controls
+     */
+    function renderCurrentPage() {
+        var $resultsContent = $('#results-content');
         var formData = getFormData();
-        var html = generateResultsTable(currentResults, formData.min_stock);
-        $('#results-content').html(html);
-        
-        // Reset selection states after re-rendering
+
+        if (currentResults.length === 0) {
+            $resultsContent.html('<div class="no-results">No results found.</div>');
+            return;
+        }
+
+        var start = (currentPage - 1) * perPage;
+        var end = Math.min(start + perPage, currentResults.length);
+        var pageProducts = currentResults.slice(start, end);
+
+        var html = generateResultsTable(pageProducts, formData.min_stock);
+        html += renderPaginationHtml(currentResults.length, currentPage, perPage);
+        $resultsContent.html(html);
+
         $('#select-all-checkbox').prop('checked', false).prop('indeterminate', false);
         updateBulkActionButtons();
+    }
+
+    /**
+     * Render pagination controls HTML
+     */
+    function renderPaginationHtml(totalItems, page, itemsPerPage) {
+        var totalPages = Math.ceil(totalItems / itemsPerPage);
+        var start = (page - 1) * itemsPerPage + 1;
+        var end = Math.min(page * itemsPerPage, totalItems);
+
+        var html = '<div class="inventory-pagination">';
+        html += '<div class="pagination-info">Showing ' + start + '–' + end + ' of ' + totalItems + ' products</div>';
+        html += '<div class="pagination-controls">';
+
+        if (totalPages > 1) {
+            if (page > 1) {
+                html += '<button class="button pagination-btn" data-page="' + (page - 1) + '">&laquo; Prev</button>';
+            } else {
+                html += '<button class="button pagination-btn pagination-disabled">&laquo; Prev</button>';
+            }
+
+            var startPage = Math.max(1, page - 2);
+            var endPage = Math.min(totalPages, startPage + 4);
+            if (endPage - startPage < 4) {
+                startPage = Math.max(1, endPage - 4);
+            }
+
+            if (startPage > 1) {
+                html += '<button class="button pagination-btn" data-page="1">1</button>';
+                if (startPage > 2) html += '<span class="pagination-ellipsis">&hellip;</span>';
+            }
+
+            for (var i = startPage; i <= endPage; i++) {
+                var activeClass = (i === page) ? ' current' : '';
+                html += '<button class="button pagination-btn' + activeClass + '" data-page="' + i + '">' + i + '</button>';
+            }
+
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) html += '<span class="pagination-ellipsis">&hellip;</span>';
+                html += '<button class="button pagination-btn" data-page="' + totalPages + '">' + totalPages + '</button>';
+            }
+
+            if (page < totalPages) {
+                html += '<button class="button pagination-btn" data-page="' + (page + 1) + '">Next &raquo;</button>';
+            } else {
+                html += '<button class="button pagination-btn pagination-disabled">Next &raquo;</button>';
+            }
+        }
+
+        html += '</div>';
+        html += '<div class="per-page-selector">';
+        html += '<label>Show <select id="per-page-select">';
+        [25, 50, 100].forEach(function(val) {
+            html += '<option value="' + val + '"' + (val === itemsPerPage ? ' selected' : '') + '>' + val + '</option>';
+        });
+        html += '</select> per page</label>';
+        html += '</div>';
+        html += '</div>';
+
+        return html;
+    }
+
+    /**
+     * Bind pagination click and per-page change events
+     */
+    function bindPagination() {
+        $(document).on('click', '.pagination-btn:not(.pagination-disabled)', function() {
+            var page = parseInt($(this).data('page'));
+            if (!isNaN(page)) {
+                currentPage = page;
+                renderCurrentPage();
+                $('html, body').animate({ scrollTop: $('#search-results').offset().top - 50 }, 300);
+            }
+        });
+
+        $(document).on('change', '#per-page-select', function() {
+            perPage = parseInt($(this).val());
+            currentPage = 1;
+            renderCurrentPage();
+        });
     }
     
     /**
@@ -957,103 +1080,111 @@ jQuery(document).ready(function($) {
                     $input.removeClass('quantity-updated');
                 }, 1000);
             } else {
-                alert('Error: ' + (response.data && response.data.message ? response.data.message : 'Failed to update quantity.'));
+                showError(response.data && response.data.message ? response.data.message : 'Failed to update quantity.');
             }
         })
         .fail(function() {
-            alert('Failed to update quantity. Please try again.');
+            showError('Failed to update quantity. Please try again.');
         });
     }
 
     /**
-     * Handle enable stock management button clicks
+     * Handle enable stock management button clicks — inline form instead of prompt()
      */
     $(document).on('click', '.enable-stock-btn', function(e) {
         e.preventDefault();
         var $btn = $(this);
-        var productId = $btn.data('product-id');
-        var $row = $btn.closest('tr');
-        var productName = $row.find('strong').first().text();
+        var $cell = $btn.closest('td');
 
-        // Prompt for stock quantity
-        var stockQty = prompt('Enable stock management for "' + productName + '"\n\nEnter initial stock quantity:', '0');
+        if ($cell.find('.enable-stock-inline').length) return;
 
-        // User cancelled
-        if (stockQty === null) {
-            return;
-        }
+        $btn.hide();
+        var $form = $(
+            '<div class="enable-stock-inline">' +
+            '<input type="number" class="enable-stock-qty" value="0" min="0" />' +
+            '<button type="button" class="button button-small button-primary enable-stock-confirm">Set</button>' +
+            '<button type="button" class="button button-small enable-stock-cancel">&#x2715;</button>' +
+            '</div>'
+        );
+        $cell.append($form);
+        $form.find('.enable-stock-qty').focus().select();
 
-        // Validate input
-        stockQty = parseInt(stockQty);
-        if (isNaN(stockQty) || stockQty < 0) {
-            alert('Please enter a valid stock quantity (0 or greater).');
-            return;
-        }
+        $form.find('.enable-stock-cancel').on('click', function() {
+            $form.remove();
+            $btn.show();
+        });
 
-        // Disable button and show loading
-        var originalText = $btn.text();
-        $btn.prop('disabled', true).text('Enabling...');
-
-        // Send AJAX request
-        $.post(wcInventoryInsights.ajaxurl, {
-            action: 'wc_inventory_insights_enable_stock',
-            product_id: productId,
-            stock_quantity: stockQty,
-            nonce: wcInventoryInsights.nonce
-        })
-        .done(function(response) {
-            if (response.success) {
-                // Update the row to show stock is now managed
-                $row.attr('data-managing-stock', '1');
-
-                // Update stock quantity cell
-                var $stockCell = $row.find('td').eq(5); // Current Stock column
-                $stockCell.html('<span>' + stockQty + '</span>');
-
-                // Update stock needed cell if it exists
-                var minStock = $('#min_stock').val();
-                if (minStock && minStock !== '') {
-                    var $neededCell = $row.find('td').eq(6); // Stock Needed column
-                    var needed = Math.max(0, parseInt(minStock) - stockQty);
-                    if (needed > 0) {
-                        $neededCell.html('<span class="stock-needed">+' + needed + '</span>');
-                    } else {
-                        $neededCell.html('-');
-                    }
-                }
-
-                // Replace the enable button with quantity controls
-                var $actionsCell = $btn.closest('td');
-                var quantityControlsHtml = '<div class="quantity-controls">' +
-                    '<button class="button button-small quantity-decrease" data-product-id="' + productId + '" title="Decrease quantity">-</button>' +
-                    '<input type="number" class="quantity-input" data-product-id="' + productId + '" value="' + stockQty + '" min="0" />' +
-                    '<button class="button button-small quantity-increase" data-product-id="' + productId + '" title="Increase quantity">+</button>' +
-                    '</div>';
-                $actionsCell.html(quantityControlsHtml);
-
-                // Update currentResults array
-                for (var i = 0; i < currentResults.length; i++) {
-                    if (currentResults[i].id == productId) {
-                        currentResults[i].managing_stock = true;
-                        currentResults[i].stock_quantity = stockQty;
-                        break;
-                    }
-                }
-
-                // Show success message
-                var $success = $('<div class="notice notice-success is-dismissible" style="margin: 10px 0;"><p>Stock management enabled for "' + escapeHtml(productName) + '" with initial quantity: ' + stockQty + '</p></div>');
-                $('#search-results').prepend($success);
-                setTimeout(function() {
-                    $success.fadeOut(300, function() { $(this).remove(); });
-                }, 3000);
-            } else {
-                alert('Error: ' + (response.data.message || 'Failed to enable stock management.'));
-                $btn.prop('disabled', false).text(originalText);
+        function doEnableStock() {
+            var $qty = $form.find('.enable-stock-qty');
+            var stockQty = parseInt($qty.val());
+            if (isNaN(stockQty) || stockQty < 0) {
+                $qty.addClass('wc-ii-input-error').focus();
+                return;
             }
-        })
-        .fail(function() {
-            alert('Failed to enable stock management. Please try again.');
-            $btn.prop('disabled', false).text(originalText);
+            $qty.removeClass('wc-ii-input-error');
+
+            var productId = $btn.data('product-id');
+            var $row = $btn.closest('tr');
+            var productName = $row.find('strong').first().text();
+
+            $form.find('.enable-stock-confirm').prop('disabled', true).text('...');
+
+            $.post(wcInventoryInsights.ajaxurl, {
+                action: 'wc_inventory_insights_enable_stock',
+                product_id: productId,
+                stock_quantity: stockQty,
+                nonce: wcInventoryInsights.nonce
+            })
+            .done(function(response) {
+                if (response.success) {
+                    $row.attr('data-managing-stock', '1');
+
+                    var $stockCell = $row.find('td').eq(5);
+                    $stockCell.html('<span>' + stockQty + '</span>');
+
+                    var minStock = $('#min_stock').val();
+                    if (minStock && minStock !== '') {
+                        var $neededCell = $row.find('td').eq(6);
+                        var needed = Math.max(0, parseInt(minStock) - stockQty);
+                        $neededCell.html(needed > 0 ? '<span class="stock-needed">+' + needed + '</span>' : '-');
+                    }
+
+                    $cell.html(
+                        '<div class="quantity-controls">' +
+                        '<button class="button button-small quantity-decrease" data-product-id="' + productId + '" title="Decrease quantity">-</button>' +
+                        '<input type="number" class="quantity-input" data-product-id="' + productId + '" value="' + stockQty + '" min="0" />' +
+                        '<button class="button button-small quantity-increase" data-product-id="' + productId + '" title="Increase quantity">+</button>' +
+                        '</div>'
+                    );
+
+                    for (var i = 0; i < currentResults.length; i++) {
+                        if (currentResults[i].id == productId) {
+                            currentResults[i].managing_stock = true;
+                            currentResults[i].stock_quantity = stockQty;
+                            break;
+                        }
+                    }
+
+                    var $success = $('<div class="notice notice-success is-dismissible" style="margin: 10px 0;"><p>Stock management enabled for "' + escapeHtml(productName) + '" with initial quantity: ' + stockQty + '</p></div>');
+                    $('#search-results').prepend($success);
+                    setTimeout(function() {
+                        $success.fadeOut(300, function() { $(this).remove(); });
+                    }, 3000);
+                } else {
+                    showError(response.data && response.data.message ? response.data.message : 'Failed to enable stock management.');
+                    $form.find('.enable-stock-confirm').prop('disabled', false).text('Set');
+                }
+            })
+            .fail(function() {
+                showError('Failed to enable stock management. Please try again.');
+                $form.find('.enable-stock-confirm').prop('disabled', false).text('Set');
+            });
+        }
+
+        $form.find('.enable-stock-confirm').on('click', doEnableStock);
+        $form.find('.enable-stock-qty').on('keydown', function(e) {
+            if (e.key === 'Enter') doEnableStock();
+            if (e.key === 'Escape') { $form.remove(); $btn.show(); }
         });
     });
 

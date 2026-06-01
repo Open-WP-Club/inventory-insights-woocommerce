@@ -24,11 +24,15 @@ add_action('wp_ajax_wc_inventory_insights_update_quantity', 'wc_inventory_insigh
  */
 function wc_inventory_insights_get_filter_values()
 {
-  if (!wp_verify_nonce($_POST['nonce'], 'wc_inventory_insights_nonce')) {
-    wp_die('Security check failed');
+  if (!wp_verify_nonce(isset($_POST['nonce']) ? $_POST['nonce'] : '', 'wc_inventory_insights_nonce')) {
+    wp_send_json_error(array('message' => __('Security check failed.', 'woocommerce-inventory-insights')), 403);
   }
 
-  $filter_type = sanitize_text_field($_POST['filter_type']);
+  if (!current_user_can('manage_woocommerce')) {
+    wp_send_json_error(array('message' => __('You do not have permission to perform this action.', 'woocommerce-inventory-insights')), 403);
+  }
+
+  $filter_type = sanitize_text_field(isset($_POST['filter_type']) ? $_POST['filter_type'] : '');
   $values = array();
 
   if ($filter_type === 'tags') {
@@ -69,8 +73,12 @@ function wc_inventory_insights_get_filter_values()
  */
 function wc_inventory_insights_get_categories()
 {
-  if (!wp_verify_nonce($_POST['nonce'], 'wc_inventory_insights_nonce')) {
-    wp_die('Security check failed');
+  if (!wp_verify_nonce(isset($_POST['nonce']) ? $_POST['nonce'] : '', 'wc_inventory_insights_nonce')) {
+    wp_send_json_error(array('message' => __('Security check failed.', 'woocommerce-inventory-insights')), 403);
+  }
+
+  if (!current_user_can('manage_woocommerce')) {
+    wp_send_json_error(array('message' => __('You do not have permission to perform this action.', 'woocommerce-inventory-insights')), 403);
   }
 
   // Get optional filter parameters to limit categories
@@ -130,7 +138,7 @@ function wc_inventory_insights_get_filtered_product_ids($filter_type, $filter_va
 {
   $args = array(
     'post_type' => array('product', 'product_variation'),
-    'post_status' => 'any',
+    'post_status' => 'publish',
     'posts_per_page' => -1,
     'fields' => 'ids',
   );
@@ -171,22 +179,27 @@ function wc_inventory_insights_get_filtered_product_ids($filter_type, $filter_va
  */
 function wc_inventory_insights_handle_ajax_search()
 {
-  if (!wp_verify_nonce($_POST['nonce'], 'wc_inventory_insights_nonce')) {
-    wp_die('Security check failed');
+  if (!wp_verify_nonce(isset($_POST['nonce']) ? $_POST['nonce'] : '', 'wc_inventory_insights_nonce')) {
+    wp_send_json_error(array('message' => __('Security check failed.', 'woocommerce-inventory-insights')), 403);
   }
 
-  $filter_type = sanitize_text_field($_POST['filter_type']);
-  $filter_value = sanitize_text_field($_POST['filter_value']);
-  $min_stock = isset($_POST['min_stock']) && $_POST['min_stock'] !== '' ? intval($_POST['min_stock']) : null;
-  $product_category = isset($_POST['product_category']) && $_POST['product_category'] !== '' ? intval($_POST['product_category']) : null;
+  if (!current_user_can('manage_woocommerce')) {
+    wp_send_json_error(array('message' => __('You do not have permission to perform this action.', 'woocommerce-inventory-insights')), 403);
+  }
+
+  $filter_type  = sanitize_text_field(isset($_POST['filter_type']) ? $_POST['filter_type'] : '');
+  $filter_value = sanitize_text_field(isset($_POST['filter_value']) ? $_POST['filter_value'] : '');
+  $min_stock    = wc_inventory_insights_sanitize_min_stock(isset($_POST['min_stock']) ? $_POST['min_stock'] : '');
+  $product_category = wc_inventory_insights_sanitize_product_category(isset($_POST['product_category']) ? $_POST['product_category'] : '');
+
+  $validation = wc_inventory_insights_validate_search_params($filter_type, $filter_value, $min_stock, $product_category);
+  if ($validation !== true) {
+    wp_send_json_error(array('message' => implode(' ', $validation)));
+  }
 
   $products = wc_inventory_insights_search_products($filter_type, $filter_value, $min_stock, $product_category);
-  $html = wc_inventory_insights_generate_results_html($products, $min_stock);
 
-  wp_send_json_success(array(
-    'products' => $products,
-    'html' => $html
-  ));
+  wp_send_json_success(array('products' => $products));
 }
 
 /**
@@ -194,14 +207,18 @@ function wc_inventory_insights_handle_ajax_search()
  */
 function wc_inventory_insights_handle_csv_export()
 {
-  if (!wp_verify_nonce($_POST['nonce'], 'wc_inventory_insights_nonce')) {
-    wp_die('Security check failed');
+  if (!wp_verify_nonce(isset($_POST['nonce']) ? $_POST['nonce'] : '', 'wc_inventory_insights_nonce')) {
+    wp_die(__('Security check failed.', 'woocommerce-inventory-insights'));
   }
 
-  $filter_type = sanitize_text_field($_POST['filter_type']);
-  $filter_value = sanitize_text_field($_POST['filter_value']);
-  $min_stock = isset($_POST['min_stock']) && $_POST['min_stock'] !== '' ? intval($_POST['min_stock']) : null;
-  $product_category = isset($_POST['product_category']) && $_POST['product_category'] !== '' ? intval($_POST['product_category']) : null;
+  if (!current_user_can('manage_woocommerce')) {
+    wp_die(__('You do not have permission to perform this action.', 'woocommerce-inventory-insights'));
+  }
+
+  $filter_type  = sanitize_text_field(isset($_POST['filter_type']) ? $_POST['filter_type'] : '');
+  $filter_value = sanitize_text_field(isset($_POST['filter_value']) ? $_POST['filter_value'] : '');
+  $min_stock    = wc_inventory_insights_sanitize_min_stock(isset($_POST['min_stock']) ? $_POST['min_stock'] : '');
+  $product_category = wc_inventory_insights_sanitize_product_category(isset($_POST['product_category']) ? $_POST['product_category'] : '');
   $export_type = isset($_POST['export_type']) ? sanitize_text_field($_POST['export_type']) : 'all';
   $selected_products = isset($_POST['selected_products']) ? array_map('intval', $_POST['selected_products']) : array();
 
@@ -276,8 +293,8 @@ function wc_inventory_insights_handle_csv_export()
  */
 function wc_inventory_insights_enable_stock_management()
 {
-  if (!wp_verify_nonce($_POST['nonce'], 'wc_inventory_insights_nonce')) {
-    wp_die('Security check failed');
+  if (!wp_verify_nonce(isset($_POST['nonce']) ? $_POST['nonce'] : '', 'wc_inventory_insights_nonce')) {
+    wp_send_json_error(array('message' => __('Security check failed.', 'woocommerce-inventory-insights')), 403);
   }
 
   if (!current_user_can('manage_woocommerce')) {
@@ -316,8 +333,8 @@ function wc_inventory_insights_enable_stock_management()
  */
 function wc_inventory_insights_update_quantity()
 {
-  if (!wp_verify_nonce($_POST['nonce'], 'wc_inventory_insights_nonce')) {
-    wp_die('Security check failed');
+  if (!wp_verify_nonce(isset($_POST['nonce']) ? $_POST['nonce'] : '', 'wc_inventory_insights_nonce')) {
+    wp_send_json_error(array('message' => __('Security check failed.', 'woocommerce-inventory-insights')), 403);
   }
 
   if (!current_user_can('manage_woocommerce')) {

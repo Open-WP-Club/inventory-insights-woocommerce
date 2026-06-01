@@ -24,7 +24,7 @@ function wc_inventory_insights_search_products($filter_type, $filter_value, $min
 {
   $args = array(
     'post_type' => array('product', 'product_variation'),
-    'post_status' => 'any',
+    'post_status' => 'publish',
     'posts_per_page' => -1,
   );
 

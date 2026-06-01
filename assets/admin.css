@@ -453,6 +453,125 @@
   color: #50575e;
 }
 
+/* Inline confirm (replaces native confirm() dialog) */
+.wc-ii-inline-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #50575e;
+}
+
+.wc-ii-inline-confirm .wc-ii-confirm-yes {
+  color: #d63638 !important;
+}
+
+/* Inline enable-stock form (replaces native prompt() dialog) */
+.enable-stock-inline {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.enable-stock-qty {
+  width: 58px;
+  padding: 3px 6px;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  font-size: 13px;
+  text-align: center;
+}
+
+.enable-stock-qty.wc-ii-input-error {
+  border-color: #d63638;
+  box-shadow: 0 0 0 1px #d63638;
+}
+
+.enable-stock-cancel {
+  min-width: auto !important;
+  padding: 3px 7px !important;
+  color: #646970 !important;
+}
+
+/* Pagination */
+.inventory-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 12px;
+  background: #fff;
+  border: 1px solid #ccd0d4;
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  margin-bottom: 20px;
+}
+
+.pagination-info {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.pagination-btn {
+  min-width: 34px;
+  padding: 4px 8px !important;
+  font-size: 13px !important;
+  line-height: 1.6 !important;
+  height: auto !important;
+}
+
+.pagination-btn.current {
+  background: #0073aa !important;
+  border-color: #0073aa !important;
+  color: #fff !important;
+  font-weight: 600;
+  cursor: default;
+}
+
+.pagination-btn.pagination-disabled {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
+}
+
+.pagination-ellipsis {
+  padding: 4px 6px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.per-page-selector {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.per-page-selector select {
+  margin: 0 4px;
+  padding: 2px 4px;
+  font-size: 13px;
+  height: auto;
+}
+
+@media (max-width: 782px) {
+  .inventory-pagination {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .pagination-controls {
+    gap: 3px;
+  }
+}
+
 /* Table Column Widths */
 .inventory-results-table th:first-child,
 .inventory-results-table td:first-child {
