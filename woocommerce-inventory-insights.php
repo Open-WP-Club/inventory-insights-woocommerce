@@ -2,18 +2,18 @@
 
 /**
  * Plugin Name: WooCommerce Inventory Insights
- * Plugin URI: https://github.com/Open-WP-Club/woocommerce-inventory-insights
+ * Plugin URI: https://github.com/Open-WP-Club/inventory-insights-woocommerce
  * Description: Monitor WooCommerce product stock levels by tags and attributes to help with wholesale ordering decisions.
- * Version: 1.3.0
+ * Version: 1.4.0
  * Author: Open WP Club
  * Author URI: https://github.com/Open-WP-Club
  * Text Domain: woocommerce-inventory-insights
  * Domain Path: /languages
  * Requires at least: 5.0
- * Tested up to: 6.8
+ * Tested up to: 7.1
  * Requires PHP: 7.4
  * WC requires at least: 5.0
- * WC tested up to: 9.0
+ * WC tested up to: 11.0
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  */
@@ -24,7 +24,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('WC_INVENTORY_INSIGHTS_VERSION', '1.3.0');
+define('WC_INVENTORY_INSIGHTS_VERSION', '1.4.0');
 define('WC_INVENTORY_INSIGHTS_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WC_INVENTORY_INSIGHTS_PLUGIN_URL', plugin_dir_url(__FILE__));
 

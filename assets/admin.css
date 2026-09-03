@@ -201,6 +201,17 @@
   font-weight: 600;
 }
 
+.stock-out-of-stock {
+  color: #b32d2e;
+  background: #fcf0f1;
+  border-radius: 4px;
+  display: inline-block;
+  font-weight: 700;
+  min-width: 24px;
+  padding: 3px 7px;
+  text-align: center;
+}
+
 .stock-needed {
   color: #d63638;
   background: #fcf0f1;

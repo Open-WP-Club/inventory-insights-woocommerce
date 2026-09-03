@@ -41,6 +41,10 @@ function wc_inventory_insights_get_filter_values()
       'hide_empty' => true,
     ));
 
+    if (is_wp_error($tags)) {
+      wp_send_json_error(array('message' => __('Failed to load product tags.', 'woocommerce-inventory-insights')));
+    }
+
     foreach ($tags as $tag) {
       $values[] = array(
         'value' => $tag->term_id,
@@ -55,6 +59,10 @@ function wc_inventory_insights_get_filter_values()
         'taxonomy' => wc_attribute_taxonomy_name($attribute->attribute_name),
         'hide_empty' => true,
       ));
+
+      if (is_wp_error($terms)) {
+        continue;
+      }
 
       foreach ($terms as $term) {
         $values[] = array(
@@ -108,7 +116,7 @@ function wc_inventory_insights_get_categories()
   $categories = get_terms($args);
 
   if (is_wp_error($categories)) {
-    wp_send_json_error('Failed to load categories');
+    wp_send_json_error(array('message' => __('Failed to load categories.', 'woocommerce-inventory-insights')));
     return;
   }
 
@@ -262,7 +270,7 @@ function wc_inventory_insights_handle_csv_export()
   }
 
   // Add CSV headers
-  fputcsv($output, $csv_headers);
+  fputcsv($output, $csv_headers, ',', '"', '');
 
   // Add product data
   foreach ($products as $product) {
@@ -281,7 +289,7 @@ function wc_inventory_insights_handle_csv_export()
 
     $csv_row[] = $product['id'];
 
-    fputcsv($output, $csv_row);
+    fputcsv($output, $csv_row, ',', '"', '');
   }
 
   fclose($output);
@@ -302,11 +310,18 @@ function wc_inventory_insights_enable_stock_management()
     return;
   }
 
-  $product_id = isset($_POST['product_id']) ? intval($_POST['product_id']) : 0;
-  $stock_quantity = isset($_POST['stock_quantity']) ? intval($_POST['stock_quantity']) : 0;
+  $product_id = isset($_POST['product_id']) ? absint($_POST['product_id']) : 0;
+  $stock_quantity = isset($_POST['stock_quantity'])
+    ? filter_var(wp_unslash($_POST['stock_quantity']), FILTER_VALIDATE_INT, array('options' => array('min_range' => 0)))
+    : false;
 
   if (!$product_id) {
     wp_send_json_error(array('message' => __('Invalid product ID.', 'woocommerce-inventory-insights')));
+    return;
+  }
+
+  if ($stock_quantity === false) {
+    wp_send_json_error(array('message' => __('Quantity must be a whole number of 0 or greater.', 'woocommerce-inventory-insights')));
     return;
   }
 
@@ -342,16 +357,18 @@ function wc_inventory_insights_update_quantity()
     return;
   }
 
-  $product_id = isset($_POST['product_id']) ? intval($_POST['product_id']) : 0;
-  $quantity = isset($_POST['quantity']) ? intval($_POST['quantity']) : 0;
+  $product_id = isset($_POST['product_id']) ? absint($_POST['product_id']) : 0;
+  $quantity = isset($_POST['quantity'])
+    ? filter_var(wp_unslash($_POST['quantity']), FILTER_VALIDATE_INT, array('options' => array('min_range' => 0)))
+    : false;
 
   if (!$product_id) {
     wp_send_json_error(array('message' => __('Invalid product ID.', 'woocommerce-inventory-insights')));
     return;
   }
 
-  if ($quantity < 0) {
-    wp_send_json_error(array('message' => __('Quantity must be 0 or greater.', 'woocommerce-inventory-insights')));
+  if ($quantity === false) {
+    wp_send_json_error(array('message' => __('Quantity must be a whole number of 0 or greater.', 'woocommerce-inventory-insights')));
     return;
   }
 

@@ -226,7 +226,7 @@ jQuery(document).ready(function($) {
         $('#load-recent-search').on('click', function() {
             var selectedIndex = $('#recent-searches-dropdown').val();
             if (selectedIndex !== '') {
-                var search = recentSearches[parseInt(selectedIndex)];
+                var search = recentSearches[parseInt(selectedIndex, 10)];
                 if (search) {
                     loadSearchIntoForm(search);
                 }
@@ -542,12 +542,12 @@ jQuery(document).ready(function($) {
         }
         
         // min_stock and product_category are optional, but if provided must be valid
-        if (data.min_stock !== '' && (isNaN(data.min_stock) || parseInt(data.min_stock) < 0)) {
+        if (data.min_stock !== '' && (isNaN(data.min_stock) || parseInt(data.min_stock, 10) < 0)) {
             showError('Minimum stock must be a positive number.');
             return false;
         }
         
-        if (data.product_category !== '' && (isNaN(data.product_category) || parseInt(data.product_category) < 0)) {
+        if (data.product_category !== '' && (isNaN(data.product_category) || parseInt(data.product_category, 10) < 0)) {
             showError('Invalid product category selected.');
             return false;
         }
@@ -733,7 +733,7 @@ jQuery(document).ready(function($) {
      */
     function bindPagination() {
         $(document).on('click', '.pagination-btn:not(.pagination-disabled)', function() {
-            var page = parseInt($(this).data('page'));
+            var page = parseInt($(this).data('page'), 10);
             if (!isNaN(page)) {
                 currentPage = page;
                 renderCurrentPage();
@@ -742,7 +742,7 @@ jQuery(document).ready(function($) {
         });
 
         $(document).on('change', '#per-page-select', function() {
-            perPage = parseInt($(this).val());
+            perPage = parseInt($(this).val(), 10);
             currentPage = 1;
             renderCurrentPage();
         });
@@ -786,7 +786,7 @@ jQuery(document).ready(function($) {
             html += '</td>';
             
             // Product name with edit link
-            html += '<td><strong><a href="' + escapeHtml(product.edit_url) + '" target="_blank">' + escapeHtml(product.name) + '</a></strong></td>';
+            html += '<td><strong><a href="' + escapeHtml(product.edit_url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(product.name) + '</a></strong></td>';
             
             // SKU
             html += '<td>' + escapeHtml(product.sku || '-') + '</td>';
@@ -795,12 +795,12 @@ jQuery(document).ready(function($) {
             html += '<td>' + escapeHtml(product.categories || '-') + '</td>';
             
             // Current stock
-            var stockClass = (minStock && minStock !== '' && product.stock_quantity < parseInt(minStock)) ? 'stock-below-threshold' : '';
+            var stockClass = getStockClass(product.stock_quantity, minStock);
             html += '<td><span class="' + stockClass + '">' + product.stock_quantity + '</span></td>';
             
             // Stock needed (if threshold set)
             if (minStock && minStock !== '') {
-                var needed = Math.max(0, parseInt(minStock) - product.stock_quantity);
+                var needed = Math.max(0, parseInt(minStock, 10) - product.stock_quantity);
                 if (needed > 0) {
                     html += '<td><span class="stock-needed">+' + needed + '</span></td>';
                 } else {
@@ -826,12 +826,32 @@ jQuery(document).ready(function($) {
         html += '</tbody></table>';
         return html;
     }
+
+    /**
+     * Return the visual status class for a stock quantity.
+     * Zero stock is always an error, even when no minimum threshold is set.
+     */
+    function getStockClass(quantity, minStock) {
+        var numericQuantity = parseInt(quantity, 10);
+        var numericMinStock = parseInt(minStock, 10);
+
+        if (numericQuantity <= 0) {
+            return 'stock-out-of-stock';
+        }
+
+        if (minStock !== '' && !isNaN(numericMinStock) && numericQuantity < numericMinStock) {
+            return 'stock-below-threshold';
+        }
+
+        return '';
+    }
     
     /**
      * Handle search error
      */
     function handleSearchError(message) {
-        $('#results-content').html('<div class="wc-inventory-error">' + escapeHtml(message) + '</div>');
+        var errorMessage = message && message.message ? message.message : message;
+        $('#results-content').html('<div class="wc-inventory-error">' + escapeHtml(errorMessage || 'Search failed. Please try again.') + '</div>');
     }
     
     /**
@@ -992,7 +1012,7 @@ jQuery(document).ready(function($) {
         var $btn = $(this);
         var productId = $btn.data('product-id');
         var $input = $('.quantity-input[data-product-id="' + productId + '"]');
-        var currentValue = parseInt($input.val()) || 0;
+        var currentValue = parseInt($input.val(), 10) || 0;
         var newValue = currentValue + 1;
 
         $input.val(newValue);
@@ -1007,7 +1027,7 @@ jQuery(document).ready(function($) {
         var $btn = $(this);
         var productId = $btn.data('product-id');
         var $input = $('.quantity-input[data-product-id="' + productId + '"]');
-        var currentValue = parseInt($input.val()) || 0;
+        var currentValue = parseInt($input.val(), 10) || 0;
         var newValue = Math.max(0, currentValue - 1);
 
         $input.val(newValue);
@@ -1020,7 +1040,7 @@ jQuery(document).ready(function($) {
     $(document).on('change', '.quantity-input', function(e) {
         var $input = $(this);
         var productId = $input.data('product-id');
-        var newValue = parseInt($input.val()) || 0;
+        var newValue = parseInt($input.val(), 10) || 0;
 
         if (newValue < 0) {
             newValue = 0;
@@ -1034,6 +1054,19 @@ jQuery(document).ready(function($) {
      * Update product quantity via AJAX
      */
     function updateProductQuantity(productId, quantity) {
+        var $row = $('tr[data-product-id="' + productId + '"]');
+        var $controls = $row.find('.quantity-controls').find('button, input');
+        var previousQuantity = quantity;
+
+        for (var resultIndex = 0; resultIndex < currentResults.length; resultIndex++) {
+            if (currentResults[resultIndex].id == productId) {
+                previousQuantity = currentResults[resultIndex].stock_quantity;
+                break;
+            }
+        }
+
+        $controls.prop('disabled', true);
+
         $.post(wcInventoryInsights.ajaxurl, {
             action: 'wc_inventory_insights_update_quantity',
             product_id: productId,
@@ -1042,22 +1075,23 @@ jQuery(document).ready(function($) {
         })
         .done(function(response) {
             if (response.success) {
+                var savedQuantity = parseInt(response.data.quantity, 10);
+                if (isNaN(savedQuantity)) {
+                    savedQuantity = quantity;
+                }
+
                 // Update the stock display in the current stock column
-                var $row = $('tr[data-product-id="' + productId + '"]');
                 var $stockCell = $row.find('td').eq(5); // Current Stock column
                 var minStock = $('#min_stock').val();
 
                 // Update stock quantity display
-                if (minStock && minStock !== '' && quantity < parseInt(minStock)) {
-                    $stockCell.html('<span class="stock-below-threshold">' + quantity + '</span>');
-                } else {
-                    $stockCell.html('<span>' + quantity + '</span>');
-                }
+                $stockCell.html('<span class="' + getStockClass(savedQuantity, minStock) + '">' + savedQuantity + '</span>');
+                $row.find('.quantity-input').val(savedQuantity);
 
                 // Update stock needed column if it exists
                 if (minStock && minStock !== '') {
                     var $neededCell = $row.find('td').eq(6); // Stock Needed column
-                    var needed = Math.max(0, parseInt(minStock) - quantity);
+                    var needed = Math.max(0, parseInt(minStock, 10) - savedQuantity);
                     if (needed > 0) {
                         $neededCell.html('<span class="stock-needed">+' + needed + '</span>');
                     } else {
@@ -1068,7 +1102,7 @@ jQuery(document).ready(function($) {
                 // Update currentResults array to keep it in sync
                 for (var i = 0; i < currentResults.length; i++) {
                     if (currentResults[i].id == productId) {
-                        currentResults[i].stock_quantity = quantity;
+                        currentResults[i].stock_quantity = savedQuantity;
                         break;
                     }
                 }
@@ -1080,11 +1114,16 @@ jQuery(document).ready(function($) {
                     $input.removeClass('quantity-updated');
                 }, 1000);
             } else {
+                $row.find('.quantity-input').val(previousQuantity);
                 showError(response.data && response.data.message ? response.data.message : 'Failed to update quantity.');
             }
         })
         .fail(function() {
+            $row.find('.quantity-input').val(previousQuantity);
             showError('Failed to update quantity. Please try again.');
+        })
+        .always(function() {
+            $controls.prop('disabled', false);
         });
     }
 
@@ -1116,7 +1155,7 @@ jQuery(document).ready(function($) {
 
         function doEnableStock() {
             var $qty = $form.find('.enable-stock-qty');
-            var stockQty = parseInt($qty.val());
+            var stockQty = parseInt($qty.val(), 10);
             if (isNaN(stockQty) || stockQty < 0) {
                 $qty.addClass('wc-ii-input-error').focus();
                 return;
@@ -1140,12 +1179,12 @@ jQuery(document).ready(function($) {
                     $row.attr('data-managing-stock', '1');
 
                     var $stockCell = $row.find('td').eq(5);
-                    $stockCell.html('<span>' + stockQty + '</span>');
-
                     var minStock = $('#min_stock').val();
+                    $stockCell.html('<span class="' + getStockClass(stockQty, minStock) + '">' + stockQty + '</span>');
+
                     if (minStock && minStock !== '') {
                         var $neededCell = $row.find('td').eq(6);
-                        var needed = Math.max(0, parseInt(minStock) - stockQty);
+                        var needed = Math.max(0, parseInt(minStock, 10) - stockQty);
                         $neededCell.html(needed > 0 ? '<span class="stock-needed">+' + needed + '</span>' : '-');
                     }
 
