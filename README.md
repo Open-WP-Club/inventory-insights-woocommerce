@@ -1,13 +1,5 @@
 # WooCommerce Inventory Insights
 
-
-- Added a clear red out-of-stock indicator whenever quantity reaches zero
-- Kept inline quantity controls in sync with the value saved by WooCommerce
-- Restored the previous quantity in the interface when an update fails
-- Improved AJAX error handling for filters and categories
-- Updated compatibility metadata for WordPress 7.1 and WooCommerce 11.0
-- Updated CSV generation for current PHP versions
-
 ## Description
 
 WooCommerce Inventory Insights is a simple yet powerful plugin that allows administrators to quickly check stock levels of products based on their tags, attributes, or categories. This is especially useful for wholesale businesses that need to monitor inventory levels and make ordering decisions.
